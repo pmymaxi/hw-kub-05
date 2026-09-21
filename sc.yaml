@@ -1,0 +1,85 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: data-sc-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /opt/k8s/sc-data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-sc-pvc
+  namespace: hw-kub-05
+spec:
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-exchange-sc
+  namespace: hw-kub-05
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-exchange-sc
+  template:
+    metadata:
+      labels:
+        app: data-exchange-sc
+    spec:
+      containers:
+        - name: busybox
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              while true; do
+                echo "$(date) - Hello from busybox" >> /data/message.txt
+                sleep 5
+              done
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+        - name: multitool
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              touch /data/message.txt
+              tail -f /data/message.txt
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: data-sc-pvc
